@@ -4,6 +4,7 @@ import { CATEGORIES, ICONS, INITIAL_APPS, TRANSLATIONS, APP_TEMPLATES } from './
 import { IconComponent } from './components/IconComponent';
 import { Plus, X, Globe, Shield, ShieldAlert, Edit2, Trash2, ExternalLink, Copy, Sparkles, Search, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { GoogleGenAI, Type } from "@google/genai";
 
 export default function App() {
   const [apps, setApps] = useState<AppItem[]>(INITIAL_APPS);
@@ -97,32 +98,90 @@ export default function App() {
     }
   };
 
+  const getGeminiApiKey = () => {
+    let key = (import.meta as any).env.VITE_GEMINI_API_KEY;
+    if (!key) {
+      try {
+        key = process.env.GEMINI_API_KEY;
+      } catch (e) {
+        // ignore
+      }
+    }
+    return key;
+  };
+
   const handleSmartFetch = async () => {
     if (!smartFetchUrl) return;
     setIsFetching(true);
     setFetchStatus('idle');
     
     try {
-      const response = await fetch('/api/smart-fetch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: smartFetchUrl })
-      });
-      
-      const responseData = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(responseData.error || 'Unknown error from server');
+      const apiKey = getGeminiApiKey();
+      if (!apiKey) {
+        throw new Error("Gemini API Key is missing. If you deployed to Vercel, please provide VITE_GEMINI_API_KEY in the Environment Variables.");
       }
+
+      // Try to fetch HTML content through a public CORS proxy
+      let htmlContext = "";
+      try {
+         const corsProxy = `https://api.allorigins.win/get?url=${encodeURIComponent(smartFetchUrl)}`;
+         const pRes = await fetch(corsProxy);
+         if (pRes.ok) {
+           const data = await pRes.json();
+           if (data.contents) {
+              // Extract the first chunks of HTML (avoiding huge token usage)
+              htmlContext = data.contents.substring(0, 15000); 
+           }
+         }
+      } catch (e) {
+         console.warn("Could not fetch page context:", e);
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-preview", 
+        contents: `Extract application metadata from this URL: ${smartFetchUrl}. 
+        Here is the HTML of the page (if any):
+        '''
+        ${htmlContext}
+        '''
+        
+        Return a JSON object with the following fields: 
+        - name: string (the app name)
+        - description: string (a short description)
+        - category: string (one of: 教會, 職場, 工具, 創意, 數據, 遊戲, 其他)
+        - icon: string (one of: Chat, Image, Music, Video, Brain, Zap, Church, Briefcase, BarChart, Heart)
+        - aspectRatio: string (one of: 16:9, 4:3, 1:1, auto)
+        
+        Make a best guess based on the HTML content or URL string itself.`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              description: { type: Type.STRING },
+              category: { type: Type.STRING },
+              icon: { type: Type.STRING },
+              aspectRatio: { type: Type.STRING },
+            },
+            required: ["name", "description", "category", "icon", "aspectRatio"]
+          }
+        },
+      });
+
+      const text = response.text;
+      if (!text) throw new Error("No response returned from Gemini");
+      const result = JSON.parse(text);
 
       if (editingApp) {
         setEditingApp({
           ...editingApp,
-          name: responseData.name || editingApp.name,
-          description: responseData.description || editingApp.description,
-          category: (CATEGORIES.includes(responseData.category as any) ? responseData.category : '其他') as Category,
-          icon: (ICONS.includes(responseData.icon as any) ? responseData.icon : 'Heart') as IconName,
-          aspectRatio: responseData.aspectRatio || '16:9',
+          name: result.name || editingApp.name,
+          description: result.description || editingApp.description,
+          category: (CATEGORIES.includes(result.category as any) ? result.category : '其他') as Category,
+          icon: (ICONS.includes(result.icon as any) ? result.icon : 'Heart') as IconName,
+          aspectRatio: result.aspectRatio || '16:9',
           link: smartFetchUrl
         });
       }
@@ -142,17 +201,18 @@ export default function App() {
     setFetchStatus('idle');
     
     try {
-      const response = await fetch('/api/smart-search', {
-        method: 'POST'
-      });
-      
-      const responseData = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(responseData.error || 'Unknown error from server');
+      const apiKey = getGeminiApiKey();
+      if (!apiKey) {
+        throw new Error("Gemini API Key is missing. If you deployed to Vercel, please provide VITE_GEMINI_API_KEY in the Environment Variables.");
       }
+      
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-preview",
+        contents: "List some examples of Google AI Studio application URLs or generic app names related to 'Jesse' or 'avt.jesse@gmail.com'. Generate a friendly message explaining that we cannot directly search all URLs without search access.",
+      });
 
-      alert(`Search results:\n\n${responseData.text}`);
+      alert(`Search results:\n\n${response.text}`);
     } catch (error: any) {
       console.error('Error searching apps:', error);
       alert(`Search Error:\n\nDetails: ${error?.message || error}`);
