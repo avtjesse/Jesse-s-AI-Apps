@@ -115,9 +115,8 @@ export default function App() {
         - icon: string (one of: ${ICONS.join(', ')})
         - aspectRatio: string (one of: 16:9, 4:3, 1:1, auto)
         
-        If you cannot find specific info, make a best guess based on the content.`,
+        If you cannot find specific info, make a best guess based on the content or URL string itself.`,
         config: {
-          tools: [{ urlContext: {} }],
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -147,8 +146,9 @@ export default function App() {
       }
       setFetchStatus('success');
       setSmartFetchUrl('');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching app info:', error);
+      alert(`${t.fetchError}\n\nDetails: ${error?.message || error}`);
       setFetchStatus('error');
     } finally {
       setIsFetching(false);
@@ -165,15 +165,14 @@ export default function App() {
         model: "gemini-3-flash-preview",
         contents: "Find shared Google AI Studio application URLs (hosted on *.run.app) created by 'Jesse' or related to 'avt.jesse@gmail.com'. Return a list of URLs.",
         config: {
-          tools: [{ googleSearch: {} }],
+          // Temporarily removed tools due to potential scope issues on free tier keys
         },
       });
 
-      // Since googleSearch returns text, we just show it or parse it.
-      // For now, let's just alert the user or log it.
       alert(`Search results:\n\n${response.text}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error searching apps:', error);
+      alert(`Search Error:\n\nDetails: ${error?.message || error}`);
       setFetchStatus('error');
     } finally {
       setIsFetching(false);
@@ -327,80 +326,6 @@ export default function App() {
           )}
         </div>
       </main>
-
-      {/* Password Modal */}
-      <AnimatePresence>
-        {isPasswordModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-[#4A3B32]/40 backdrop-blur-sm"
-              onClick={() => setIsPasswordModalOpen(false)}
-            />
-            <motion.div 
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
-            >
-              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                <h2 className="text-xl font-bold text-[#4A3B32] font-serif">
-                  {t.adminPasswordPrompt}
-                </h2>
-                <button 
-                  onClick={() => setIsPasswordModalOpen(false)}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              
-              <form onSubmit={handlePasswordSubmit} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.password}</label>
-                  <input 
-                    type="password" 
-                    value={passwordInput}
-                    onChange={e => {
-                      setPasswordInput(e.target.value);
-                      setPasswordError(false);
-                    }}
-                    autoFocus
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 outline-none transition-all ${
-                      passwordError 
-                        ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                        : 'border-gray-300 focus:ring-[#B23A48] focus:border-[#B23A48]'
-                    }`}
-                    placeholder="••••••••"
-                  />
-                  {passwordError && (
-                    <p className="mt-1 text-sm text-red-500">{t.incorrectPassword}</p>
-                  )}
-                </div>
-                
-                <div className="pt-2 flex justify-end gap-3">
-                  <button 
-                    type="button"
-                    onClick={() => setIsPasswordModalOpen(false)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    {t.cancel}
-                  </button>
-                  <button 
-                    type="submit"
-                    disabled={!passwordInput}
-                    className="px-4 py-2 text-sm font-medium text-white bg-[#B23A48] rounded-lg hover:bg-[#9A2E3A] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {t.submit}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Password Modal */}
       <AnimatePresence>
