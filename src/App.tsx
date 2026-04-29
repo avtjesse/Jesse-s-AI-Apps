@@ -4,7 +4,6 @@ import { CATEGORIES, ICONS, INITIAL_APPS, TRANSLATIONS, APP_TEMPLATES } from './
 import { IconComponent } from './components/IconComponent';
 import { Plus, X, Globe, Shield, ShieldAlert, Edit2, Trash2, ExternalLink, Copy, Sparkles, Search, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI, Type } from "@google/genai";
 
 export default function App() {
   const [apps, setApps] = useState<AppItem[]>(INITIAL_APPS);
@@ -104,43 +103,26 @@ export default function App() {
     setFetchStatus('idle');
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Extract application metadata from this URL: ${smartFetchUrl}. 
-        Return a JSON object with the following fields: 
-        - name: string (the app name)
-        - description: string (a short description)
-        - category: string (one of: ${CATEGORIES.filter(c => c !== '全部').join(', ')})
-        - icon: string (one of: ${ICONS.join(', ')})
-        - aspectRatio: string (one of: 16:9, 4:3, 1:1, auto)
-        
-        If you cannot find specific info, make a best guess based on the content or URL string itself.`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              description: { type: Type.STRING },
-              category: { type: Type.STRING },
-              icon: { type: Type.STRING },
-              aspectRatio: { type: Type.STRING },
-            },
-            required: ["name", "description", "category", "icon", "aspectRatio"]
-          }
-        },
+      const response = await fetch('/api/smart-fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: smartFetchUrl })
       });
+      
+      const responseData = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(responseData.error || 'Unknown error from server');
+      }
 
-      const result = JSON.parse(response.text);
       if (editingApp) {
         setEditingApp({
           ...editingApp,
-          name: result.name || editingApp.name,
-          description: result.description || editingApp.description,
-          category: (CATEGORIES.includes(result.category as any) ? result.category : '其他') as Category,
-          icon: (ICONS.includes(result.icon as any) ? result.icon : 'Heart') as IconName,
-          aspectRatio: result.aspectRatio || '16:9',
+          name: responseData.name || editingApp.name,
+          description: responseData.description || editingApp.description,
+          category: (CATEGORIES.includes(responseData.category as any) ? responseData.category : '其他') as Category,
+          icon: (ICONS.includes(responseData.icon as any) ? responseData.icon : 'Heart') as IconName,
+          aspectRatio: responseData.aspectRatio || '16:9',
           link: smartFetchUrl
         });
       }
@@ -160,16 +142,17 @@ export default function App() {
     setFetchStatus('idle');
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: "Find shared Google AI Studio application URLs (hosted on *.run.app) created by 'Jesse' or related to 'avt.jesse@gmail.com'. Return a list of URLs.",
-        config: {
-          // Temporarily removed tools due to potential scope issues on free tier keys
-        },
+      const response = await fetch('/api/smart-search', {
+        method: 'POST'
       });
+      
+      const responseData = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(responseData.error || 'Unknown error from server');
+      }
 
-      alert(`Search results:\n\n${response.text}`);
+      alert(`Search results:\n\n${responseData.text}`);
     } catch (error: any) {
       console.error('Error searching apps:', error);
       alert(`Search Error:\n\nDetails: ${error?.message || error}`);
